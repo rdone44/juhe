@@ -2,91 +2,154 @@ name: DNS Resolution
 
 on:
   schedule:
-    - cron: '0 */12 * * *'  # 每12小时运行一次
-  workflow_dispatch:        # 支持手动触发
+    - cron: '*/30 * * * *'
+  workflow_dispatch:
 
-# 定义工作流所需的权限
 permissions:
-  contents: write    # 允许写入仓库内容（用于提交文件）
-  issues: write     # 允许创建Issues（用于通知）
+  contents: write
+  issues: write
 
 jobs:
-  resolve:
+  dns-resolution:
     runs-on: ubuntu-22.04
+    
     steps:
-      - uses: actions/checkout@v3
-        with:
-          fetch-depth: 0
-      
-      - name: Set up Python
-        uses: actions/setup-python@v3
-        with:
-          python-version: '3.x'
-      
-      - name: Install dependencies
-        run: pip install -r requirements.txt
-      
-      - name: Run DNS resolver
-        env:
-          API_URL_REGIONS: ${{ secrets.API_URL_REGIONS }}
-          DOMAIN_SUFFIX: ${{ secrets.DOMAIN_SUFFIX }}
-          DNS_SERVER: ${{ secrets.DNS_SERVER }}
-          DNS_TIMEOUT: ${{ secrets.DNS_TIMEOUT }}
-        run: python 1.py
-      
-      # 提交和推送更改
-      - name: Configure Git
-        run: |
-          git config --global user.name 'github-actions[bot]'
-          git config --global user.email 'github-actions[bot]@users.noreply.github.com'
-      
-      - name: Commit and push changes
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          git add ip_list.txt
-          if ! git diff --quiet HEAD || ! git diff --staged --quiet; then
-            git commit -m "Update IP list [skip ci]"
-            git push origin HEAD:${GITHUB_REF}
-          else
-            echo "No changes to commit"
-          fi
-      
-      - name: Upload artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: ip-list
-          path: ip_list.txt
-          retention-days: 7
-          compression-level: 6
-      
-      - name: Check for changes
-        id: check_changes
-        run: |
-          git diff --quiet HEAD^ HEAD ip_list.txt || echo "changes=true" >> $GITHUB_OUTPUT
-      
-      # 使用GITHUB_TOKEN创建Issue进行失败通知
-      - name: Send notification on failure
-        if: failure()
-        uses: actions/github-script@v6
-        with:
-          script: |
-            github.rest.issues.create({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              title: 'DNS Resolution Failed',
-              body: `DNS resolution workflow failed at ${new Date().toISOString()}\nPlease check the [workflow run](${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}) for details.`
-            })
-      
-      # 使用GITHUB_TOKEN创建Issue进行更新通知
-      - name: Send notification on IP changes
-        if: steps.check_changes.outputs.changes == 'true'
-        uses: actions/github-script@v6
-        with:
-          script: |
-            github.rest.issues.create({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              title: 'IP List Updated',
-              body: `IP list has been updated at ${new Date().toISOString()}\nCheck the [latest changes](${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/commits/main/ip_list.txt).`
-            }) 
+    - uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+    
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.12'
+        
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install dnspython python-dotenv
+        
+    - name: Run DNS resolution
+      env:
+        API_URL_REGIONS: ${{ secrets.API_URL_REGIONS }}
+        DOMAIN_SUFFIX: ${{ secrets.DOMAIN_SUFFIX }}
+        DNS_SERVER: ${{ secrets.DNS_SERVER }}
+        DNS_TIMEOUT: ${{ secrets.DNS_TIMEOUT }}
+      run: |
+        echo "=== 环境检查 ==="
+        echo "Python版本:"
+        python --version
+        echo "工作目录:"
+        pwd
+        ls -la
+        
+        echo -e "\n=== 环境变量检查 ==="
+        echo "API_URL_REGIONS: ${API_URL_REGIONS:+已设置}"
+        echo "DOMAIN_SUFFIX: ${DOMAIN_SUFFIX:+已设置}"
+        echo "DNS_SERVER: ${DNS_SERVER:+已设置}"
+        echo "DNS_TIMEOUT: ${DNS_TIMEOUT:+已设置}"
+        
+        echo -e "\n=== 开始执行DNS解析 ==="
+        # 使用-u参数确保Python输出不被缓存
+        python -u 1.py
+        
+        echo -e "\n=== 检查执行结果 ==="
+        echo "当前目录文件列表:"
+        ls -la
+        
+        if [ -f ip_list.txt ]; then
+          echo -e "\nip_list.txt已生成:"
+          echo "文件大小: $(wc -c < ip_list.txt) 字节"
+          echo "文件内容:"
+          cat ip_list.txt
+        else
+          echo -e "\n错误: ip_list.txt未生成!"
+          echo "可能的原因:"
+          echo "1. Python脚本执行失败"
+          echo "2. 配置参数不正确"
+          echo "3. DNS解析失败"
+          exit 1
+        fi
+        
+    - name: Prepare Git
+      if: success() && hashFiles('ip_list.txt') != ''
+      run: |
+        echo "=== Git配置 ==="
+        echo "配置用户信息..."
+        git config --global user.name "github-actions[bot]"
+        git config --global user.email "github-actions[bot]@users.noreply.github.com"
+        
+        echo -e "\n当前Git配置:"
+        git config --list
+        
+        echo -e "\n=== 工作目录状态 ==="
+        echo "目录内容:"
+        ls -la
+        
+        echo -e "\nGit状态:"
+        git status
+        
+        if [ -f ip_list.txt ]; then
+          echo -e "\n添加ip_list.txt到暂存区..."
+          git add ip_list.txt || {
+            echo "添加文件失败，错误码: $?"
+            echo "文件状态:"
+            ls -l ip_list.txt
+            exit 1
+          }
+        else
+          echo "错误: ip_list.txt不存在!"
+          exit 1
+        fi
+        
+        echo -e "\n暂存区状态:"
+        git status
+        
+    - name: Check for changes
+      id: check
+      if: success()
+      run: |
+        echo "=== 检查文件变更 ==="
+        if git diff --staged --quiet; then
+          echo "没有需要提交的更改"
+        else
+          echo "发现更改，准备提交"
+          echo "changes=true" >> $GITHUB_OUTPUT
+          
+          echo -e "\n更改内容:"
+          git diff --staged
+        fi
+        
+    - name: Commit and push changes
+      if: steps.check.outputs.changes == 'true'
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      run: |
+        echo "=== 提交更改 ==="
+        git commit -m "Update IP list" || {
+          echo "提交失败，错误码: $?"
+          exit 1
+        }
+        
+        echo -e "\n=== 推送到仓库 ==="
+        git push origin HEAD:${GITHUB_REF} || {
+          echo "推送失败，错误码: $?"
+          echo "远程仓库信息:"
+          git remote -v
+          exit 1
+        }
+        
+        echo -e "\n=== 验证推送结果 ==="
+        if git ls-remote --exit-code origin HEAD:${GITHUB_REF}; then
+          echo "成功推送到仓库"
+        else
+          echo "推送失败!"
+          exit 1
+        fi
+        
+    - name: Upload artifact
+      if: success() || failure()
+      uses: actions/upload-artifact@v4
+      with:
+        name: ip-list
+        path: ip_list.txt
+        compression-level: 6 
