@@ -28,9 +28,13 @@ def load_config():
     
     # 处理地区代码列表
     regions = [r.strip() for r in regions.split(',') if r.strip()]
+    print(f"加载的地区列表: {', '.join(regions)}")
     
     # 生成域名列表
     domains = [f"{region}.{domain_suffix}" for region in regions]
+    print(f"要解析的域名列表: {', '.join(domains)}")
+    print(f"使用的DNS服务器: {dns_server}")
+    print(f"超时设置: {timeout}秒")
     
     return {
         'domains': domains,
@@ -42,6 +46,7 @@ def get_all_domain_ips(domain, resolver, max_retries=5):
     # 从域名中提取地区代码
     region = domain.split('.')[0]
     result = []
+    success_count = 0
     
     # DNS服务器列表（按优先级排序）
     dns_servers = [
@@ -72,6 +77,7 @@ def get_all_domain_ips(domain, resolver, max_retries=5):
             for ip in a_records:
                 print(f"- {ip}")
                 result.append(f"{ip}#{region}")
+                success_count += 1
             
             # 如果成功解析IPv4，尝试解析IPv6（可选）
             try:
@@ -86,6 +92,7 @@ def get_all_domain_ips(domain, resolver, max_retries=5):
             
             # 如果成功获取到IPv4地址，直接返回
             if result:
+                print(f"成功解析到 {success_count} 个IPv4地址")
                 return result
             
         except dns.resolver.NoAnswer:
@@ -115,11 +122,19 @@ def save_results(results, filename="ip_list.txt"):
             for result in results:
                 f.write(f"{result}\n")
         print(f"\n结果已保存到 {filename}")
+        print(f"共保存了 {len(results)} 条记录")
+        if len(results) > 0:
+            print("保存的内容示例:")
+            for i, result in enumerate(results[:3], 1):
+                print(f"{i}. {result}")
+            if len(results) > 3:
+                print("...")
     except Exception as e:
         print(f"保存文件时出错: {str(e)}")
 
 if __name__ == "__main__":
     try:
+        print("=== DNS解析工具开始运行 ===")
         # 加载配置
         config = load_config()
         
@@ -127,15 +142,25 @@ if __name__ == "__main__":
         resolver = dns.resolver.Resolver()
         
         # 循环解析每个域名
-        print("开始解析所有域名...")
+        print("\n开始解析所有域名...")
         all_results = []
+        success_domains = 0
+        total_domains = len(config['domains'])
+        
         for domain in config['domains']:
             results = get_all_domain_ips(domain, resolver)
+            if results:
+                success_domains += 1
             all_results.extend(results)
         
         # 保存结果到文件
         save_results(all_results)
-        print("\n所有域名解析完成！")
+        print(f"\n解析完成统计:")
+        print(f"- 总域名数: {total_domains}")
+        print(f"- 成功解析: {success_domains}")
+        print(f"- 解析失败: {total_domains - success_domains}")
+        print(f"- 总IP数量: {len(all_results)}")
+        print("=== DNS解析工具运行结束 ===")
         
     except ValueError as e:
         print(f"配置错误: {str(e)}")
