@@ -4,26 +4,25 @@ from dotenv import load_dotenv
 import time
 
 def load_config():
-    # 优先使用环境变量，如果没有则加载.env文件
-    if not any([
-        os.environ.get('API_URL_REGIONS'),
-        os.environ.get('DOMAIN_SUFFIX'),
-        os.environ.get('DNS_SERVER'),
-        os.environ.get('DNS_TIMEOUT')
-    ]):
-        # 如果环境变量都不存在，则尝试加载.env文件
-        load_dotenv()
-        print("使用.env文件配置")
-    else:
-        print("使用环境变量配置")
-    
-    # 获取配置（优先使用环境变量）
+    # 先尝试从环境变量获取配置
     regions = os.getenv('API_URL_REGIONS')
     domain_suffix = os.getenv('DOMAIN_SUFFIX')
     dns_server = os.getenv('DNS_SERVER')
     timeout = os.getenv('DNS_TIMEOUT')
     
-    # 验证必要的配置是否存在
+    # 如果任何一个配置不存在，则尝试加载.env文件
+    if not all([regions, domain_suffix, dns_server, timeout]):
+        print("环境变量不完整，尝试加载.env文件...")
+        load_dotenv()
+        # 重新获取配置（优先使用环境变量，不存在则使用.env中的值）
+        regions = os.getenv('API_URL_REGIONS')
+        domain_suffix = os.getenv('DOMAIN_SUFFIX')
+        dns_server = os.getenv('DNS_SERVER')
+        timeout = os.getenv('DNS_TIMEOUT')
+    else:
+        print("使用环境变量配置")
+    
+    # 最终检查所有必要的配置是否存在
     if not all([regions, domain_suffix, dns_server, timeout]):
         raise ValueError("缺少必要的配置参数，请检查环境变量或.env文件")
     
