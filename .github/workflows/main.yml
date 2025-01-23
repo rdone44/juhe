@@ -86,62 +86,53 @@ jobs:
         echo "目录内容:"
         ls -la
         
-        echo -e "\n查找所有.gitignore文件:"
-        find . -name ".gitignore" -type f -exec echo "发现.gitignore:" {} \; -exec cat {} \;
+        echo -e "\n查找并显示所有.gitignore文件:"
+        find . -name ".gitignore" -type f -exec sh -c 'echo "=== 文件: {}"; cat {}; echo' \;
         
         echo -e "\nGit状态:"
         git status
         
         if [ -f ip_list.txt ]; then
           echo -e "\n添加ip_list.txt到暂存区..."
-          # 确保文件存在且可读
+          echo "文件状态:"
           ls -l ip_list.txt
           
-          # 尝试直接添加文件
-          echo "尝试方法1: 直接添加"
-          git add ip_list.txt || echo "方法1失败"
+          echo -e "\n检查文件是否被忽略:"
+          git check-ignore -v ip_list.txt || echo "文件未被忽略"
           
-          # 如果失败，尝试强制添加
-          if ! git diff --staged --quiet ip_list.txt; then
-            echo "尝试方法2: 强制添加"
-            git add -f ip_list.txt || echo "方法2失败"
-          fi
-          
-          # 如果仍然失败，尝试更新索引
-          if ! git diff --staged --quiet ip_list.txt; then
-            echo "尝试方法3: 更新索引"
-            git update-index --no-assume-unchanged ip_list.txt
-            git add -A ip_list.txt || echo "方法3失败"
-          fi
-          
-          # 检查是否成功添加
-          if ! git diff --staged --quiet ip_list.txt; then
-            echo "所有添加方法都失败"
-            echo "文件状态:"
-            ls -l ip_list.txt
-            git check-ignore -v ip_list.txt
+          echo -e "\n尝试强制添加文件..."
+          if git add -f ip_list.txt; then
+            echo "文件添加成功"
+          else
+            echo "强制添加失败，错误码: $?"
             exit 1
+          fi
+          
+          echo -e "\n验证文件是否在暂存区:"
+          git status
+          if git diff --cached --quiet ip_list.txt; then
+            echo "错误：文件未被添加到暂存区"
+            exit 1
+          else
+            echo "文件已成功添加到暂存区"
           fi
         else
           echo "错误: ip_list.txt不存在!"
           exit 1
         fi
         
-        echo -e "\n暂存区状态:"
-        git status
-        
     - name: 检查变更
       id: check
       if: success()
       run: |
         echo "=== 检查文件变更 ==="
-        if git diff --staged --quiet; then
+        if git diff --cached --quiet; then
           echo "没有需要提交的更改"
         else
           echo "发现更改，准备提交"
           echo "changes=true" >> $GITHUB_OUTPUT
           echo -e "\n更改内容:"
-          git diff --staged
+          git diff --cached
         fi
         
     - name: 提交并推送更改
