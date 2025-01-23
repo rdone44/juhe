@@ -147,18 +147,31 @@ jobs:
         }
         
         echo -e "\n=== 推送到仓库 ==="
-        git push origin HEAD:${GITHUB_REF} || {
+        # 确保我们有最新的更改
+        git pull --rebase origin ${GITHUB_REF#refs/heads/}
+        
+        # 推送更改
+        git push origin HEAD:${GITHUB_REF#refs/heads/} || {
           echo "推送失败，错误码: $?"
           echo "远程仓库信息:"
           git remote -v
           exit 1
         }
         
+        # 简单验证推送是否成功
         echo -e "\n=== 验证推送结果 ==="
-        if git ls-remote --exit-code origin HEAD:${GITHUB_REF}; then
+        git fetch origin
+        LOCAL_COMMIT=$(git rev-parse HEAD)
+        REMOTE_COMMIT=$(git rev-parse origin/${GITHUB_REF#refs/heads/})
+        
+        if [ "$LOCAL_COMMIT" = "$REMOTE_COMMIT" ]; then
           echo "成功推送到仓库"
+          echo "本地提交: $LOCAL_COMMIT"
+          echo "远程提交: $REMOTE_COMMIT"
         else
-          echo "推送失败!"
+          echo "推送验证失败!"
+          echo "本地提交: $LOCAL_COMMIT"
+          echo "远程提交: $REMOTE_COMMIT"
           exit 1
         fi
         
