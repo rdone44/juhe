@@ -91,7 +91,8 @@ jobs:
         
         if [ -f ip_list.txt ]; then
           echo -e "\n添加ip_list.txt到暂存区..."
-          git add ip_list.txt || {
+          # 使用-f参数强制添加文件，即使它在.gitignore中
+          git add -f ip_list.txt || {
             echo "添加文件失败，错误码: $?"
             echo "文件状态:"
             ls -l ip_list.txt
