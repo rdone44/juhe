@@ -86,18 +86,42 @@ jobs:
         echo "目录内容:"
         ls -la
         
+        echo -e "\n查找所有.gitignore文件:"
+        find . -name ".gitignore" -type f -exec echo "发现.gitignore:" {} \; -exec cat {} \;
+        
         echo -e "\nGit状态:"
         git status
         
         if [ -f ip_list.txt ]; then
           echo -e "\n添加ip_list.txt到暂存区..."
-          # 使用-f参数强制添加文件，即使它在.gitignore中
-          git add -f ip_list.txt || {
-            echo "添加文件失败，错误码: $?"
+          # 确保文件存在且可读
+          ls -l ip_list.txt
+          
+          # 尝试直接添加文件
+          echo "尝试方法1: 直接添加"
+          git add ip_list.txt || echo "方法1失败"
+          
+          # 如果失败，尝试强制添加
+          if ! git diff --staged --quiet ip_list.txt; then
+            echo "尝试方法2: 强制添加"
+            git add -f ip_list.txt || echo "方法2失败"
+          fi
+          
+          # 如果仍然失败，尝试更新索引
+          if ! git diff --staged --quiet ip_list.txt; then
+            echo "尝试方法3: 更新索引"
+            git update-index --no-assume-unchanged ip_list.txt
+            git add -A ip_list.txt || echo "方法3失败"
+          fi
+          
+          # 检查是否成功添加
+          if ! git diff --staged --quiet ip_list.txt; then
+            echo "所有添加方法都失败"
             echo "文件状态:"
             ls -l ip_list.txt
+            git check-ignore -v ip_list.txt
             exit 1
-          }
+          fi
         else
           echo "错误: ip_list.txt不存在!"
           exit 1
