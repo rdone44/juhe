@@ -34,5 +34,4 @@ ENV/
 *.swo
 
 # 输出文件
-ip_list.txt
 *.log 
