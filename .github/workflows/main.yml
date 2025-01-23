@@ -1,9 +1,9 @@
-name: DNS Resolution
+name: DNS解析自动更新
 
 on:
   schedule:
-    - cron: '*/30 * * * *'
-  workflow_dispatch:
+    - cron: '*/30 * * * *'  # 每30分钟运行一次
+  workflow_dispatch:  # 支持手动触发
 
 permissions:
   contents: write
@@ -14,21 +14,22 @@ jobs:
     runs-on: ubuntu-22.04
     
     steps:
-    - uses: actions/checkout@v4
+    - name: 检出代码
+      uses: actions/checkout@v4
       with:
         fetch-depth: 0
-    
-    - name: Set up Python
+        
+    - name: 设置Python环境
       uses: actions/setup-python@v5
       with:
         python-version: '3.12'
         
-    - name: Install dependencies
+    - name: 安装依赖
       run: |
         python -m pip install --upgrade pip
         pip install dnspython python-dotenv
         
-    - name: Run DNS resolution
+    - name: 运行DNS解析
       env:
         API_URL_REGIONS: ${{ secrets.API_URL_REGIONS }}
         DOMAIN_SUFFIX: ${{ secrets.DOMAIN_SUFFIX }}
@@ -70,7 +71,7 @@ jobs:
           exit 1
         fi
         
-    - name: Prepare Git
+    - name: 准备Git提交
       if: success() && hashFiles('ip_list.txt') != ''
       run: |
         echo "=== Git配置 ==="
@@ -104,7 +105,7 @@ jobs:
         echo -e "\n暂存区状态:"
         git status
         
-    - name: Check for changes
+    - name: 检查变更
       id: check
       if: success()
       run: |
@@ -114,12 +115,11 @@ jobs:
         else
           echo "发现更改，准备提交"
           echo "changes=true" >> $GITHUB_OUTPUT
-          
           echo -e "\n更改内容:"
           git diff --staged
         fi
         
-    - name: Commit and push changes
+    - name: 提交并推送更改
       if: steps.check.outputs.changes == 'true'
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -146,7 +146,7 @@ jobs:
           exit 1
         fi
         
-    - name: Upload artifact
+    - name: 上传结果文件
       if: success() || failure()
       uses: actions/upload-artifact@v4
       with:
