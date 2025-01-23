@@ -5,9 +5,10 @@ on:
     - cron: '0 */12 * * *'  # 每12小时运行一次
   workflow_dispatch:        # 支持手动触发
 
+# 定义工作流所需的权限
 permissions:
-  contents: write
-  issues: write
+  contents: write    # 允许写入仓库内容（用于提交文件）
+  issues: write     # 允许创建Issues（用于通知）
 
 jobs:
   resolve:
@@ -33,6 +34,7 @@ jobs:
           DNS_TIMEOUT: ${{ secrets.DNS_TIMEOUT }}
         run: python 1.py
       
+      # 提交和推送更改，使用GITHUB_TOKEN进行身份验证
       - name: Commit and push if changed
         run: |
           git config --global user.name 'github-actions[bot]'
@@ -40,6 +42,9 @@ jobs:
           git add ip_list.txt
           git diff --quiet && git diff --staged --quiet || (git commit -m "Update IP list [skip ci]" && git push origin HEAD:${GITHUB_REF})
         env:
+          # GITHUB_TOKEN由GitHub Actions自动提供，用于身份验证
+          # 这是一个临时令牌，每次工作流运行都会重新生成
+          # 它只在当前仓库和当前工作流运行期间有效
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       
       - name: Upload artifact
@@ -54,6 +59,7 @@ jobs:
         run: |
           git diff --quiet HEAD^ HEAD ip_list.txt || echo "changes=true" >> $GITHUB_OUTPUT
       
+      # 使用GITHUB_TOKEN创建Issue进行失败通知
       - name: Send notification on failure
         if: failure()
         uses: actions/github-script@v6
@@ -66,6 +72,7 @@ jobs:
               body: `DNS resolution workflow failed at ${new Date().toISOString()}\nPlease check the [workflow run](${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}) for details.`
             })
       
+      # 使用GITHUB_TOKEN创建Issue进行更新通知
       - name: Send notification on IP changes
         if: steps.check_changes.outputs.changes == 'true'
         uses: actions/github-script@v6
