@@ -2,7 +2,7 @@ name: DNS解析自动更新
 
 on:
   schedule:
-    - cron: '0 12 * * *'  # 每30分钟运行一次
+    - cron: '0 16 * * *'  # 每天北京时间23:00运行（UTC 15:00）
   workflow_dispatch:  # 支持手动触发
 
 permissions:
